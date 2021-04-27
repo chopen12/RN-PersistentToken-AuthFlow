@@ -1,6 +1,6 @@
-# portos user app
+# React Native Persistent Token Authentication flow
 
-- React Native Persistent Token Authentication flow
+- Auth flow to check for token in storage to check if user was previously logged. Consumes API.
 
 ## Environment Setup
 
