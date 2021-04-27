@@ -1,112 +1,136 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow strict-local
- */
-
+import 'react-native-gesture-handler';
 import React from 'react';
-import type {Node} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import {NavigationContainer} from '@react-navigation/native';
+import {createStackNavigator} from '@react-navigation/stack';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import AsyncStorage from '@react-native-community/async-storage';
+import FeatherIcon from 'react-native-vector-icons/Feather';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+//import from local files
+import {BLACK, WHITE, AQUA} from './src/constants/themeColors';
+// loading
+import LoadingScreen from './src/components/general/LoadingScreen';
+// bottom tabs
+import HomeScreen from './src/screens/HomeScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import LogoutScreen from './src/screens/LogoutScreen';
 
-const Section = ({children, title}): Node => {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-};
+// context
+import {AuthContext} from './src/components/context/AuthContext';
 
-const App: () => Node = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.js</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
+//shared styles
+const screenSharedOpts = {
+  headerTitleStyle: {
     fontSize: 18,
-    fontWeight: '400',
+    fontWeight: 'bold',
   },
-  highlight: {
-    fontWeight: '700',
+  headerStyle: {
+    backgroundColor: WHITE,
   },
-});
+  headerTintColor: BLACK,
+};
 
-export default App;
+//tab nav, stacks inside
+const TabNavigator = createBottomTabNavigator();
+function TabNavigatorScreen() {
+  return (
+    <TabNavigator.Navigator
+      initialRouteName="Home"
+      screenOptions={({route}) => ({
+        tabBarIcon: ({focused, color, size}) => {
+          let iconName;
+
+          if (route.name === 'Home') {
+            iconName = 'home';
+          } else {
+            iconName = 'log-out';
+          }
+
+          return <FeatherIcon name={iconName} color={color} size={size} />;
+        },
+        headerShown: false,
+      })}
+      tabBarOptions={{
+        activeTintColor: AQUA,
+        inactiveTintColor: BLACK,
+        showLabel: false,
+      }}>
+      <TabNavigator.Screen name="Home" component={HomeScreen} />
+      <TabNavigator.Screen name="Logout" component={LogoutScreen} />
+    </TabNavigator.Navigator>
+  );
+}
+
+//main app
+const MainStack = createStackNavigator();
+
+export default function App({navigation}) {
+  const [state, dispatch] = React.useReducer(
+    (prevState, action) => {
+      switch (action.type) {
+        case 'LOGIN':
+          return {
+            ...prevState,
+            isLoading: false,
+            tokenIsPresent: true,
+          };
+        case 'LOGOUT':
+          return {
+            ...prevState,
+            isLoading: false,
+            tokenIsPresent: null,
+          };
+      }
+    },
+    {
+      isLoading: true,
+      tokenIsPresent: null,
+    },
+  );
+
+  React.useEffect(() => {
+    const booter = async () => {
+      let userToken = null;
+
+      try {
+        userToken = await AsyncStorage.getItem('userToken');
+      } catch (e) {
+        // No token found, user hasn't logged in before
+        // userToken === null
+      }
+      dispatch({type: userToken ? 'LOGIN' : 'LOGOUT'});
+    };
+
+    booter();
+  }, []);
+
+  const authContext = React.useMemo(
+    () => ({
+      signIn: () => dispatch({type: 'LOGIN'}),
+      signOut: () => dispatch({type: 'LOGOUT'}),
+    }),
+    [],
+  );
+
+  if (state.isLoading) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <NavigationContainer>
+      <AuthContext.Provider value={authContext}>
+        <MainStack.Navigator headerMode="none">
+          {state.tokenIsPresent == null ? (
+            <>
+              <MainStack.Screen name="Login" component={LoginScreen} />
+            </>
+          ) : (
+            <>
+              <MainStack.Screen name="Main" component={TabNavigatorScreen} />
+            </>
+          )}
+        </MainStack.Navigator>
+      </AuthContext.Provider>
+    </NavigationContainer>
+  );
+}
